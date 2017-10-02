@@ -18,14 +18,14 @@ using CSV_Analyzer_Pro.Core.PluginSystem;
 using Syncfusion.Windows.Forms.Grid.Grouping;
 
 namespace CSV_Analyzer_Pro{
-    public partial class Form1 : Form{
+    public partial class Form1 : Form {
         #region Globals
         PluginLoader loader = new PluginLoader();
 
         DataSet ds = new DataSet();
 
         BackgroundWorker worker;
-        
+
         string path = "";
 
         bool _exiting = false;
@@ -34,7 +34,7 @@ namespace CSV_Analyzer_Pro{
         #endregion
 
         #region Initializing
-        public Form1(){
+        public Form1() {
             InitializeComponent();
 
             //Initiate worker
@@ -47,12 +47,15 @@ namespace CSV_Analyzer_Pro{
 
             //Enable Progress Reorting
             worker.WorkerReportsProgress = true;
+
+            //Initialize Context Menus
+            InitalizeContextMenus();
         }
 
         private void Form1_Load(object sender, EventArgs e) {
             try {
                 loader.LoadPlugins();
-            }catch(Exception exc) {
+            } catch (Exception exc) {
                 Console.WriteLine(string.Format("Plugins couldnt be loaded: {0}", exc.Message));
             }
             LoadCommands();
@@ -110,7 +113,7 @@ namespace CSV_Analyzer_Pro{
         }
 
         private void FindToolStripMenuItem_Click(object sender, EventArgs e) {
-            
+
         }
 
         private void setToolStripMenuItem_Click(object sender, EventArgs e) {
@@ -143,7 +146,7 @@ namespace CSV_Analyzer_Pro{
             //e.Result = "Done";
         }
 
-        private void worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) { 
+        private void worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) {
             //MessageBox.Show(e.Result.ToString());
         }
 
@@ -165,8 +168,8 @@ namespace CSV_Analyzer_Pro{
         private void OnColumnHeaderMouseClick(object sender, MouseEventArgs e) {
             int row, col;
             GridDataBoundGrid dbg = sender as GridDataBoundGrid;
-            if(dbg.PointToRowCol(new Point(e.X,e.Y),out row,out col)){
-                if(dbg.Model[row,(col - 1)].CellType == "ColumnHeaderCell"){
+            if (dbg.PointToRowCol(new Point(e.X, e.Y), out row, out col)) {
+                if (dbg.Model[row, (col - 1)].CellType == "ColumnHeaderCell") {
                     int tableIndex = tabControl1.SelectedIndex;
                     EditHeader eh = new EditHeader(this.UpdateHeader);
                     eh.TextBox1.Text = ds.Tables[tableIndex.ToString()].Columns[(col - 1)].ToString();
@@ -176,7 +179,7 @@ namespace CSV_Analyzer_Pro{
             }
         }
 
-        private void OnKeyCommands(object sender,KeyEventArgs e) {
+        private void OnKeyCommands(object sender, KeyEventArgs e) {
             //Psuedo code
         }
 
@@ -197,8 +200,8 @@ namespace CSV_Analyzer_Pro{
             ds.Tables[pageIndex.ToString()].Columns[index].ColumnName = array[1];
         }
 
-        private void HandleFilter(string filterState,string queryState,string queryString) {
-            if(filterState == "Row") {
+        private void HandleFilter(string filterState, string queryState, string queryString) {
+            if (filterState == "Row") {
                 if (queryState == "Like") {
                     GridDataBoundGrid dbg = tabControl1.SelectedTab.Controls.OfType<GridDataBoundGrid>().First();
                     DataView dv = ((DataTable)dbg.DataSource).DefaultView;
@@ -307,11 +310,13 @@ namespace CSV_Analyzer_Pro{
             dbg.BaseStylesMap["Row Header"].StyleInfo.CellType = "Header";
 
             dbg.Model.QueryCellInfo += new Syncfusion.Windows.Forms.Grid.GridQueryCellInfoEventHandler(Model_QueryCellInfo);
+            dbg.CellClick += new Syncfusion.Windows.Forms.Grid.GridCellClickEventHandler(GridCellClickEventHandler2);
+
             #endregion
         }
 
         public bool IsWelcomePage() {
-            if(tabControl1.SelectedIndex == 0) {
+            if (tabControl1.SelectedIndex == 0) {
                 return true;
             } else {
                 return false;
@@ -342,7 +347,7 @@ namespace CSV_Analyzer_Pro{
             _exiting = true;
             try {
                 Environment.Exit(0);
-            }catch(Exception e) {
+            } catch (Exception e) {
                 MessageBox.Show("There was an error trying to shutdown.\n\n Try closing all pages and then exiting.");
             }
         }
@@ -449,6 +454,90 @@ namespace CSV_Analyzer_Pro{
             int index = tabControl1.SelectedIndex;
 
             ds.Tables[index.ToString()].Columns.Add("");
+        }
+        #endregion
+
+        #region CellContextMenu
+
+        static MenuItem[] menuItems = new MenuItem[] { new MenuItem("Cut"), new MenuItem("Copy"), new MenuItem("Paste") };
+        static ContextMenu buttonMenu;
+
+        private void InitalizeContextMenus() {
+
+            menuItems[0].Click += new System.EventHandler(ContextMenuCut);
+            menuItems[1].Click += new System.EventHandler(ContextMenuCopy);
+            menuItems[2].Click += new System.EventHandler(ContextMenuPaste);
+            buttonMenu = new ContextMenu(menuItems);
+
+        }
+
+        private void ContextMenuCut(object sender, EventArgs e) {
+            int index = tabControl1.SelectedIndex;
+
+            GridDataBoundGrid dbg = tabControl1.SelectedTab.Controls.OfType<GridDataBoundGrid>().First();
+
+            int rowIndex;
+            int colIndex;
+
+            dbg.CurrentCell.GetCurrentCell(out rowIndex, out colIndex);
+
+            string text = dbg.CurrentCell.Model.GetActiveText(rowIndex, colIndex);
+            Clipboard.SetText(text);
+
+            rowIndex -= 1;
+            colIndex -= 1;
+
+            DataRow dr = ds.Tables[index.ToString()].Rows[rowIndex];
+            dr.BeginEdit();
+            dr[colIndex] = "";
+            dr.AcceptChanges();
+            dr.EndEdit();
+            dbg.CurrentCell.Model.SetActiveText(rowIndex+1, colIndex+1, "");
+          
+        }
+
+
+        private void ContextMenuCopy(object sender, EventArgs e) {
+            int index = tabControl1.SelectedIndex;
+
+            GridDataBoundGrid dbg = tabControl1.SelectedTab.Controls.OfType<GridDataBoundGrid>().First();
+    
+            int rowIndex;
+            int colIndex;
+            dbg.CurrentCell.GetCurrentCell(out rowIndex, out colIndex);
+            string text = dbg.CurrentCell.Model.GetActiveText(rowIndex, colIndex);
+
+            Clipboard.SetText(text);
+        }
+
+        private void ContextMenuPaste(object sender, EventArgs e) {
+            int index = tabControl1.SelectedIndex;
+
+            GridDataBoundGrid dbg = tabControl1.SelectedTab.Controls.OfType<GridDataBoundGrid>().First();
+
+            int rowIndex;
+            int colIndex;
+            
+            dbg.CurrentCell.GetCurrentCell(out rowIndex, out colIndex);
+            string text = Clipboard.GetText();
+            
+            rowIndex -= 1;
+            colIndex -= 1;
+
+            DataRow dr = ds.Tables[index.ToString()].Rows[rowIndex];
+            dr.BeginEdit();
+            dr[colIndex] = text;
+            dr.AcceptChanges();
+            dr.EndEdit();
+            dbg.CurrentCell.Model.SetActiveText(rowIndex+1, colIndex+1, text);
+        }
+
+        private void GridCellClickEventHandler2(object sender, GridCellClickEventArgs e) { // this is in the wrong region
+            
+            if (e.MouseEventArgs.Button.Equals(MouseButtons.Right)) {
+                buttonMenu.Show(this, Cursor.Position);
+            }
+
         }
         #endregion
 
